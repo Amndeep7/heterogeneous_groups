@@ -29,7 +29,9 @@ Example: `
 
 from __future__ import annotations
 
+import math
 from functools import reduce
+from itertools import combinations
 from typing import (
     TYPE_CHECKING,
     Hashable,
@@ -41,11 +43,7 @@ from typing import (
     cast,
 )
 
-from .data_properties import (
-    DataProperties,
-    DataProperty,
-    Key,
-)
+from .data_properties import DataProperties, DataProperty, Key
 
 if TYPE_CHECKING:  # get pyright mostly off my back
     from dataclasses import dataclass
@@ -170,8 +168,18 @@ class Grouper:
     def group_algorithm_number(self, num_g: int) -> Mapping[int, Sequence[str]]:
         """
         Implementation of the heterogeneous grouping algorithm based off of a specified
-        number of groups.  There is no guarantee that these groups will be same-sized.
+        number of groups.  The algorithm did not specify what to do to prevent group
+        sizes from exceeding ceil(num_items/num_g) which results in a bug where almost
+        all the items consolidate into one massive group with the exception of however
+        many needed to fill out the specified number of groups requirement, so I came
+        up with a stopgap measure that caps group sizes at ceil(num_items/num_g) but it
+        runs into a worst case when num_items/num_g has a non-zero remainder such that
+        groups consistently hit that size leaving one group considerably undersized w/r
+        to its brethren.
         """
+        if num_g < 2:
+            raise ValueError("Insufficient groups", num_g)
+
         matrix = self.difference_matrix()
         groups: MutableMapping[int, MutableSequence[str]] = dict(
             zip(
@@ -217,12 +225,77 @@ class Grouper:
                 list(groups.keys())[0],
             )
 
-            if g_h != g_k:
+            if g_h != g_k and (
+                len(groups[g_h]) + len(groups[g_k])
+                <= math.ceil(len(matrix.keys()) / num_g)
+            ):
                 groups[g_h].extend(groups[g_k])
                 groups.pop(g_k)
 
             # since it's not a triangular matrix, have to delete from both sides
             matrix[m_i].pop(m_j)
             matrix[m_j].pop(m_i)
+
+        return groups
+
+    def group_algorithm_same_size_best_approximation(
+        self, num_g: int
+    ) -> Mapping[int, Sequence[Hashable]]:
+        """
+        My own novel (to me at least, maybe not to literature at large) heterogeneous
+        grouping algorithm that ensures group sizes are as consistent as possible.
+
+        Textual description of the algorithm is as follows:
+
+        1) Identify a set of size num_g consisting of the items most homogenous to each
+        other.  Assign each item in this set to their own group.
+
+        2) While there are still ungrouped items:
+            - Identify the ungrouped item-unassigned group pairing which has the largest
+            cumulative difference (i.e. the sum of the differences between this item
+            and every item in the group) and assign that item to that group.
+            - While there are still groups that haven't been assigned to this round (and
+            there are still ungrouped items): repeat the assignment process but only
+            using groups that have not yet been assigned to in the current round.
+        """
+        if num_g < 2:
+            raise ValueError("Insufficient groups", num_g)
+
+        matrix = self.difference_matrix()
+
+        homogeneous_group = min(
+            combinations(matrix.keys(), num_g),
+            key=lambda c: sum(matrix[i[0]][i[1]] for i in combinations(c, 2)),
+        )
+        groups: Mapping[int, MutableSequence[Hashable]] = {
+            i: [val] for i, val in enumerate(homogeneous_group)
+        }
+
+        ungrouped = list(set(matrix.keys()) - set(homogeneous_group))
+        while ungrouped:
+            unassigned = list(groups.keys())
+
+            def get_cum_diff(i_item: int, i_group: int) -> float:
+                return sum(
+                    matrix[ungrouped[i_item]][v] for v in groups[unassigned[i_group]]
+                )
+
+            while unassigned and ungrouped:
+                l_item = 0
+                l_group = 0
+                l_cd = get_cum_diff(l_item, l_group)
+
+                for i, _ in enumerate(ungrouped):
+                    for j, _ in enumerate(unassigned):
+                        cur_cd = get_cum_diff(i, j)
+                        if cur_cd > l_cd:
+                            l_item = i
+                            l_group = j
+                            l_cd = cur_cd
+
+                groups[unassigned[l_group]].append(ungrouped[l_item])
+
+                unassigned.pop(l_group)
+                ungrouped.pop(l_item)
 
         return groups
