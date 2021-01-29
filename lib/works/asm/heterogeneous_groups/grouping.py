@@ -29,21 +29,23 @@ Example: `
 
 from __future__ import annotations
 
-import collections.abc
 from functools import reduce
 from typing import (
     TYPE_CHECKING,
-    Any,
     Hashable,
     Mapping,
     MutableMapping,
     MutableSequence,
-    NoReturn,
     Sequence,
+    Union,
     cast,
 )
 
-from .data_properties import DataProperties, DataProperty, Key
+from .data_properties import (
+    DataProperties,
+    DataProperty,
+    Key,
+)
 
 if TYPE_CHECKING:  # get pyright mostly off my back
     from dataclasses import dataclass
@@ -58,40 +60,35 @@ class Grouper:
     """
 
     def __init__(
-        self, data: Sequence[Mapping[Hashable, Any]], data_props: DataProperties
+        self, data: Sequence[Mapping[Hashable, object]], data_props: DataProperties
     ) -> None:
 
         self.identifier = data_props.identifier_prop
 
-        def incorrect_type_error(instance: Any) -> NoReturn:
-            """
-            The 'else' when pattern matching on a union type.
-            """
-            raise AssertionError(f"Incorrect type: {type(instance).__name__}")
-
-        if isinstance(data_props.numeric_props, collections.abc.Sequence):
+        if data_props.numeric_props is not None:
             self.nprops = data_props.numeric_props
-        elif data_props.numeric_props is None:
+        else:
             self.nprops = []
-        else:
-            incorrect_type_error(data_props.numeric_props)
 
-        if isinstance(data_props.categorical_props, collections.abc.Sequence):
+        if data_props.categorical_props is not None:
             self.cprops = data_props.categorical_props
-        elif data_props.categorical_props is None:
-            self.cprops = []
         else:
-            incorrect_type_error(data_props.categorical_props)
+            self.cprops = []
 
-        self.data: Sequence[Mapping[Key, float | str]] = [
+        self.data: Sequence[MutableMapping[Key, float | str]] = [
             {
-                key: d[key]
+                key: cast(Union[float, str], d[key])
                 for key in [p.key for p in self.nprops]
                 + [p.key for p in self.cprops]
                 + [self.identifier.key]
             }
             for d in data
         ]
+
+        if data_props.randomizer_prop is not None:
+            self.nprops.extend([data_props.randomizer_prop])
+            for d in self.data:  # pylint: disable=invalid-name
+                d[data_props.randomizer_prop.key] = data_props.randomizer_prop.data()
 
     def scaled_grid(
         self,
@@ -173,7 +170,7 @@ class Grouper:
     def group_algorithm_number(self, num_g: int) -> Mapping[int, Sequence[str]]:
         """
         Implementation of the heterogeneous grouping algorithm based off of a specified
-        number of groups.
+        number of groups.  There is no guarantee that these groups will be same-sized.
         """
         matrix = self.difference_matrix()
         groups: MutableMapping[int, MutableSequence[str]] = dict(
@@ -197,8 +194,8 @@ class Grouper:
                             # for the fact that the reduce calls the lambda immediately
                             # instead of lazily waiting until the end, so the variable
                             # doesn't turn into just the last one
-                            if matrix[r][acc] # pylint: disable=cell-var-from-loop
-                            > matrix[r][cur] # pylint: disable=cell-var-from-loop
+                            if matrix[r][acc]  # pylint: disable=cell-var-from-loop
+                            > matrix[r][cur]  # pylint: disable=cell-var-from-loop
                             else cur,
                             matrix[r].keys(),
                         ),

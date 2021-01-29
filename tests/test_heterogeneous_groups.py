@@ -281,3 +281,8 @@ def test_example_group_algorithm_number(data_example, dataprops_example):
         0: ["id1"],
         1: ["id2"],
     }
+
+
+def test_keys_must_be_unique():
+    with pytest.raises(ValueError):
+        DataProperties(IdentifierProperty(Key("id")), [NumericProperty(Key("id"))])

@@ -22,10 +22,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import InitVar
+from random import Random
 from typing import (
     TYPE_CHECKING,
     Mapping,
     MutableMapping,
+    MutableSequence,
     NewType,
     Optional,
     Sequence,
@@ -33,9 +35,13 @@ from typing import (
     cast,
 )
 
-from pydantic import root_validator
+from pydantic import Field, root_validator
 
-if TYPE_CHECKING:  # get pyright mostly off my back
+# Pyright complains about members not existing on type `Dataclass` since it doesn't
+# support Pydantic's wrapper variant.  Instead we pretend to import the normal dataclass
+# function so as to get Pyright off my back, but that means when we use `config=` in the
+# decorator, it still gets pissy so those lines require explicit "type: ignore"s.
+if TYPE_CHECKING:
     from dataclasses import dataclass  # pylint: disable=ungrouped-imports
 else:
     from pydantic.dataclasses import dataclass
@@ -193,6 +199,45 @@ class NumericProperty(DataProperty):
         return super().__hash__()
 
 
+class PydanticConfig:  # pylint: disable=too-few-public-methods
+    """
+    Helper class to allow custom types to be used in `Field`s without having to write
+    the validator functions that Pydantic is otherwise looking for.
+    """
+
+    arbitrary_types_allowed = True
+
+
+@dataclass(frozen=True, config=PydanticConfig)  # type: ignore
+class RandomizerProperty(NumericProperty):
+    """
+    A property that contains pseudo-randomly generated data within the
+    measurement_bounds.  A random number generator with a specific seed or any other
+    properties can be provided so long as it implements `uniform(a, b)`.
+    """
+
+    random: Random = Field(default_factory=Random)
+
+    def __hash__(self) -> int:  # pylint: disable=useless-super-delegation
+        return super().__hash__()
+
+    def data(self, bounds: Optional[ValuePair] = None) -> float:
+        """
+        Generates random data within inclusive ranges as specified by the first
+        provided of `bounds`, `measurement_bounds`, or `scale_bounds`.
+        """
+        if bounds is not None:
+            lower = bounds.lower
+            upper = bounds.upper
+        elif self.measurement_bounds is not None:
+            lower = self.measurement_bounds.lower
+            upper = self.measurement_bounds.upper
+        else:
+            lower = self.scale_bounds.lower
+            upper = self.scale_bounds.upper
+        return self.random.uniform(lower, upper)
+
+
 @dataclass(frozen=True)
 class CategoricalProperty(DataProperty):
     """
@@ -244,9 +289,56 @@ class CategoricalProperty(DataProperty):
 class DataProperties:
     """
     A specification of all relevant properties from the data set.  Only properties
-    specified here will be accounted for in the similarity calculations.
+    specified here will be accounted for in the similarity calculations.  All properties
+    must be unique (i.e. have a unique key).  The exception to this is the randomizer
+    property which will overwrite any data keyed with the same key to be random data,
+    consequently it is not necessary to specify it in the data set at all.
     """
 
     identifier_prop: IdentifierProperty
-    numeric_props: Optional[Sequence[NumericProperty]] = None
+    numeric_props: Optional[MutableSequence[NumericProperty]] = None
     categorical_props: Optional[Sequence[CategoricalProperty]] = None
+    randomizer_prop: Optional[RandomizerProperty] = None
+
+    @root_validator
+    @classmethod
+    def check_keys_unique(
+        cls: Type[DataProperties],
+        values: Mapping[str, Property | Sequence[Property] | None],
+    ) -> Mapping[str, Property | Sequence[Property] | None]:
+        """
+        Validate that all the keys are unique.
+        """
+        props: MutableSequence[Property] = (
+            [cast(Property, values.get("identifier_prop"))]
+            if values.get("identifier_prop") is not None
+            else []
+        )
+        props.extend(
+            cast(
+                Sequence[Property],
+                values.get("numeric_props")
+                if values.get("numeric_props") is not None
+                else [],
+            )
+        )
+        props.extend(
+            cast(
+                Sequence[Property],
+                values.get("categorical_props")
+                if values.get("categorical_props") is not None
+                else [],
+            )
+        )
+        props.extend(
+            cast(
+                Sequence[Property],
+                [values.get("randomizer_prop")]
+                if values.get("randomizer_prop") is not None
+                else [],
+            )
+        )
+        keys = list(map(lambda p: p.key, props))
+        if len(keys) != len(set(keys)):
+            raise ValueError("All properties must have unique keys", values)
+        return values
