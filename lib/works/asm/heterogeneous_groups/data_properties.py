@@ -21,7 +21,7 @@ Example:
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import InitVar
+from dataclasses import InitVar, field
 from random import Random
 from typing import (
     TYPE_CHECKING,
@@ -35,7 +35,7 @@ from typing import (
     cast,
 )
 
-from pydantic import Field, root_validator
+from pydantic import root_validator, parse_obj_as
 
 # Pyright complains about members not existing on type `Dataclass` since it doesn't
 # support Pydantic's wrapper variant.  Instead we pretend to import the normal dataclass
@@ -127,7 +127,18 @@ class Similarity(RestrictedFloat):
         return cast(Similarity, ret)
 
 
-@dataclass(frozen=True)
+class PydanticConfig:  # pylint: disable=too-few-public-methods
+    """
+    Helper class to allow custom types to be used in `Field`s without having to write
+    the validator functions that Pydantic is otherwise looking for.
+    """
+
+    arbitrary_types_allowed = True
+
+
+# pylint: disable=unexpected-keyword-arg
+@dataclass(frozen=True, config=PydanticConfig)  # type: ignore
+# pylint: enable=unexpected-keyword-arg
 class Connection:
     """
     The similarity between two values in a categorical property.
@@ -135,7 +146,7 @@ class Connection:
 
     value_a: str
     value_b: str
-    similarity: Similarity = Similarity(0)
+    similarity: Similarity = field(default_factory=lambda: Similarity(0))
 
 
 Key = NewType("Key", str)
@@ -199,16 +210,9 @@ class NumericProperty(DataProperty):
         return super().__hash__()
 
 
-class PydanticConfig:  # pylint: disable=too-few-public-methods
-    """
-    Helper class to allow custom types to be used in `Field`s without having to write
-    the validator functions that Pydantic is otherwise looking for.
-    """
-
-    arbitrary_types_allowed = True
-
-
+# pylint: disable=unexpected-keyword-arg
 @dataclass(frozen=True, config=PydanticConfig)  # type: ignore
+# pylint: enable=unexpected-keyword-arg
 class RandomizerProperty(NumericProperty):
     """
     A property that contains pseudo-randomly generated data within the
@@ -216,7 +220,7 @@ class RandomizerProperty(NumericProperty):
     properties can be provided so long as it implements `uniform(a, b)`.
     """
 
-    random: Random = Field(default_factory=Random)
+    random: Random = field(default_factory=Random)
 
     def __hash__(self) -> int:  # pylint: disable=useless-super-delegation
         return super().__hash__()
@@ -245,24 +249,24 @@ class CategoricalProperty(DataProperty):
     properties to not be completely dissimilar from each other (ex. red and yellow have
     some similarity as they are both warm colors whereas yellow and blue are dissimilar
     due to blue being a cool color), so it is possible to define the similarity in
-    these connections.  Instead of using the convenience parameter of `connections`, it
-    is possible to directly provide the underlying construct of nested maps, but care
-    must be taken to ensure that this construct is commutative
-    (ex. sims[val1][val2] == sims[val2][val1]).
+    these connections.
     """
 
     connections: InitVar[Optional[Sequence[Connection]]] = None
-    similarities: Optional[Mapping[str, Mapping[str, Similarity]]] = None
+    similarities: Optional[Mapping[str, Mapping[str, Similarity]]] = field(default=None, init=False)
 
     def __post_init_post_parse__(
         self, connections: Optional[Sequence[Connection]]
     ) -> None:
-        if self.similarities is None and connections is not None:
+        if connections is not None:
+            connections = parse_obj_as(list[Connection], connections)
             sims: Mapping[str, MutableMapping[str, Similarity]] = defaultdict(dict)
             for con in connections:
                 sims[con.value_a][con.value_b] = con.similarity
                 sims[con.value_b][con.value_a] = con.similarity
             super().__setattr__("similarities", sims)
+        else:
+            super().__setattr__("similarities", None)
 
     @root_validator
     @classmethod
