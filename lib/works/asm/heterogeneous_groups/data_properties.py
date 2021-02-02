@@ -35,7 +35,7 @@ from typing import (
     cast,
 )
 
-from pydantic import root_validator, parse_obj_as
+from pydantic import parse_obj_as, root_validator  # pylint: disable=no-name-in-module
 
 # Pyright complains about members not existing on type `Dataclass` since it doesn't
 # support Pydantic's wrapper variant.  Instead we pretend to import the normal dataclass
@@ -222,6 +222,10 @@ class RandomizerProperty(NumericProperty):
 
     random: Random = field(default_factory=Random)
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.random, Random):
+            super().__setattr__("random", Random(self.random))
+
     def __hash__(self) -> int:  # pylint: disable=useless-super-delegation
         return super().__hash__()
 
@@ -253,7 +257,9 @@ class CategoricalProperty(DataProperty):
     """
 
     connections: InitVar[Optional[Sequence[Connection]]] = None
-    similarities: Optional[Mapping[str, Mapping[str, Similarity]]] = field(default=None, init=False)
+    similarities: Optional[Mapping[str, MutableMapping[str, Similarity]]] = field(
+        default=None, init=False
+    )
 
     def __post_init_post_parse__(
         self, connections: Optional[Sequence[Connection]]
@@ -304,14 +310,12 @@ class DataProperties:
     categorical_props: Optional[Sequence[CategoricalProperty]] = None
     randomizer_prop: Optional[RandomizerProperty] = None
 
-    @root_validator
-    @classmethod
-    def check_keys_unique(
-        cls: Type[DataProperties],
-        values: Mapping[str, Property | Sequence[Property] | None],
-    ) -> Mapping[str, Property | Sequence[Property] | None]:
+    @staticmethod
+    def _get_properties(
+        values: Mapping[str, Property | Sequence[Property] | None]
+    ) -> MutableSequence[Property]:
         """
-        Validate that all the keys are unique.
+        Returns a list of all specified properties.
         """
         props: MutableSequence[Property] = (
             [cast(Property, values.get("identifier_prop"))]
@@ -342,7 +346,62 @@ class DataProperties:
                 else [],
             )
         )
+        return props
+
+    @root_validator
+    @classmethod
+    def check_keys_unique(
+        cls: Type[DataProperties],
+        values: Mapping[str, Property | Sequence[Property] | None],
+    ) -> Mapping[str, Property | Sequence[Property] | None]:
+        """
+        Validate that all the keys are unique.
+        """
+        props = cls._get_properties(values)
         keys = list(map(lambda p: p.key, props))
         if len(keys) != len(set(keys)):
             raise ValueError("All properties must have unique keys", values)
+        return values
+
+    @root_validator
+    @classmethod
+    def convert_untyped_to_typed(
+        cls: Type[DataProperties],
+        values: MutableMapping[str, Property | Sequence[Property] | None],
+    ) -> Mapping[str, Property | Sequence[Property] | None]:
+        """
+        Convert all untyped parameters to their appropriate types - necessary since
+        when pydantic parses the object, it leaves any non-pydantic classes alone,
+        which means that the types backed by, for example, floats aren't converted.
+        This is an issue when the types apply certain restrictions to the base class.
+        Implementation detail: at the moment this is more of a validation step, but
+        might turn into an actual parsing/conversion process if additional custom
+        classes are added.
+        """
+
+        def convert_key(prop: Property) -> Property:
+            object.__setattr__(prop, "key", Key(prop.key))
+            return prop
+
+        def convert_weight(prop: Property) -> Property:
+            if isinstance(prop, DataProperty):
+                object.__setattr__(prop, "weight", Weight(prop.weight))
+            return prop
+
+        def convert_similarity(prop: Property) -> Property:
+            if isinstance(prop, CategoricalProperty) and prop.similarities:
+                for key1 in prop.similarities:
+                    for key2 in prop.similarities[key1]:
+                        prop.similarities[key1][key2] = Similarity(
+                            prop.similarities[key1][key2]
+                        )
+            return prop
+
+        props = cls._get_properties(values)
+
+        # since the underlying objects are the same, these maps also apply to values
+        props = list(map(convert_key, props))
+        props = list(map(convert_weight, props))
+        props = list(map(convert_similarity, props))
+
         return values
