@@ -1,14 +1,13 @@
 [tool.poetry]
 name = "works.asm.heterogeneous_groups"
-version = "0.3.0"
-description = "An implementation of some heterogeneous grouping algorithms extended to work with both numerical and categorical data based off of personal work and work done by Yueh-Min Huang and Ting-Ting Wu in \"A Systematic Approach for Learner Group Composition Utilizing U-Learning Portfolio\"."
+version = "0.4.0"
+description = "An implementation of some heterogeneous grouping algorithms that work with both numerical and categorical data."
 authors = ["Amndeep Singh Mann <me@asm.works>"]
 packages = [ { include = "works", from = "lib" }, ]
 
 [tool.poetry.dependencies]
 python = "^3.9"
 pydantic = "^1.7.3"
-shellingham = "^1.3.2"
 typer = "^0.3.2"
 
 [tool.poetry.dev-dependencies]
@@ -19,6 +18,10 @@ isort = "^5.7.0"
 pylint = "^2.6.0"
 safety = "^1.10.3"
 mypy = "^0.800"
+semgrep = "^0.39.1"
+
+[tool.poetry.scripts]
+heterogeneous_groups = "works.asm.heterogeneous_groups.cli:app"
 
 [tool.isort]
 profile = "black"

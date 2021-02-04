@@ -177,8 +177,15 @@ class Grouper:
         groups consistently hit that size leaving one group considerably undersized w/r
         to its brethren.
         """
-        if num_g < 2:
-            raise ValueError("Insufficient groups", num_g)
+        if num_g < 1:
+            raise ValueError(
+                f"Insufficient groups: must be greater than 1, but was actually {num_g}"
+            )
+        if num_g > len(self.data):
+            raise ValueError(
+                f"Number of groups ({num_g}) greater than number of items "
+                f"({len(self.data)})"
+            )
 
         matrix = self.difference_matrix()
         groups: MutableMapping[int, MutableSequence[str]] = dict(
@@ -258,8 +265,15 @@ class Grouper:
             there are still ungrouped items): repeat the assignment process but only
             using groups that have not yet been assigned to in the current round.
         """
-        if num_g < 2:
-            raise ValueError("Insufficient groups", num_g)
+        if num_g < 1:
+            raise ValueError(
+                f"Insufficient groups: must be greater than 1, but was actually {num_g}"
+            )
+        if num_g > len(self.data):
+            raise ValueError(
+                f"Number of groups ({num_g}) greater than number of items "
+                f"({len(self.data)})"
+            )
 
         matrix = self.difference_matrix()
 

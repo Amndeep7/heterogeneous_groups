@@ -37,8 +37,7 @@ def dataprops_ten_percent_difference():
     cps = [
         CategoricalProperty(Key("c1")),
         CategoricalProperty(
-            Key("c2"),
-            connections=[Connection("ye", "yee", 0.5)] # type: ignore
+            Key("c2"), connections=[Connection("ye", "yee", 0.5)]  # type: ignore
         ),
         CategoricalProperty(Key("c3"), Weight(0.25)),
     ]
@@ -56,7 +55,7 @@ def test_ten_percent_scaled_grid(
             CategoricalProperty(
                 Key("c2"),
                 Weight(1.0),
-                connections=[Connection("ye", "yee", 0.5)], # type: ignore
+                connections=[Connection("ye", "yee", 0.5)],  # type: ignore
             ): "ye",
             CategoricalProperty(Key("c3"), Weight(0.25)): "re",
             NumericProperty(
@@ -72,7 +71,7 @@ def test_ten_percent_scaled_grid(
             CategoricalProperty(
                 Key("c2"),
                 Weight(1.0),
-                connections=[Connection("ye", "yee", 0.5)], # type: ignore
+                connections=[Connection("ye", "yee", 0.5)],  # type: ignore
             ): "yee",
             CategoricalProperty(Key("c3"), Weight(0.25)): "ree",
             NumericProperty(
@@ -85,7 +84,7 @@ def test_ten_percent_scaled_grid(
             CategoricalProperty(
                 Key("c2"),
                 Weight(1.0),
-                connections=[Connection("ye", "yee", 0.5)], # type: ignore
+                connections=[Connection("ye", "yee", 0.5)],  # type: ignore
             ): "yee",
             CategoricalProperty(Key("c3"), Weight(0.25)): "re",
             NumericProperty(
@@ -251,7 +250,7 @@ def dataprops_example():
         CategoricalProperty(Key("c1")),
         CategoricalProperty(
             Key("c2"),
-            connections=[Connection("val1", "val2", Similarity(0.25))], # type: ignore
+            connections=[Connection("val1", "val2", Similarity(0.25))],  # type: ignore
         ),
     ]
     return DataProperties(idp, nps, cps)
@@ -264,7 +263,13 @@ def test_example_scaled_grid(data_example, dataprops_example):
             CategoricalProperty(
                 Key("c2"),
                 Weight(1.0),
-                connections=[Connection("val1", "val2", Similarity(0.25))], # type: ignore
+                connections=[
+                    Connection(  # type: ignore
+                        "val1",
+                        "val2",
+                        Similarity(0.25),
+                    )
+                ],
             ): "val1",
             NumericProperty(
                 Key("n"), Weight(0.1), measurement_bounds=ValuePair(0.0, 10.0)
@@ -275,7 +280,13 @@ def test_example_scaled_grid(data_example, dataprops_example):
             CategoricalProperty(
                 Key("c2"),
                 Weight(1.0),
-                connections=[Connection("val1", "val2", Similarity(0.25))], # type: ignore
+                connections=[
+                    Connection(  # type: ignore
+                        "val1",
+                        "val2",
+                        Similarity(0.25),
+                    )
+                ],
             ): "val2",
             NumericProperty(
                 Key("n"), Weight(0.1), measurement_bounds=ValuePair(0.0, 10.0)

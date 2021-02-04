@@ -1,0 +1,31 @@
+{
+	"identifier_prop": {
+		"key": "id"
+	},
+	"numeric_props": [
+		{
+			"key": "n1",
+			"weight": 0.25,
+			"measurement_bounds": {
+				"lower": 0,
+				"upper": 10
+			}
+		}
+	],
+	"categorical_props": [
+		{
+			"key": "c1",
+			"connections": [
+				{
+					"value_a": "test",
+					"value_b": "ing",
+					"similarity": 0.75
+				}
+			]
+		}
+	],
+	"randomizer_prop": {
+		"key": "rand",
+		"random": 4321
+	}
+}
