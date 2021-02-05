@@ -107,12 +107,15 @@ class RestrictedFloat(float):
 
 class Weight(RestrictedFloat):
     """
-    The weight for a given property: must be in [0, 1] where 0 is no weight and 1 is
-    fully weighted.
+    The weight for a given property: must be in [-1, 1] where -1 is fully inversely
+    weighted (i.e. it'll cause items with similar values for a property to come
+    together), 0 signifies no weight (i.e. this property will have no impact on how
+    items come together), and 1 is fully weighted (i.e. it'll cause items with
+    dissimilar values for a property to come together).
     """
 
     def __new__(cls: Type[Weight], value: float) -> Weight:
-        ret = super().__new__(cls, value, Boundaries(0, 1))
+        ret = super().__new__(cls, value, Boundaries(-1, 1))
         return cast(Weight, ret)
 
 

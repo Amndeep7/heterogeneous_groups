@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "works.asm.heterogeneous_groups"
-version = "0.4.0"
+version = "0.4.1"
 description = "An implementation of some heterogeneous grouping algorithms that work with both numerical and categorical data."
 authors = ["Amndeep Singh Mann <me@asm.works>"]
 packages = [ { include = "works", from = "lib" }, ]
